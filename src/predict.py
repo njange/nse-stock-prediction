@@ -1,20 +1,24 @@
+import numpy as np
 import pandas as pd
-import joblib
+import tensorflow as tf
+from sklearn.preprocessing import MinMaxScaler
 
-# Load trained model
-model = joblib.load("models/stock_price_model.pkl")
+model = tf.keras.models.load_model("models/stock_lstm.h5")
+scaler = MinMaxScaler()
+df = pd.read_csv("data/processed_stock_data.csv")
+prices = scaler.fit_transform(df["Close"].values.reshape(-1, 1))
 
-# Load dataset to get recent data
-df = pd.read_csv("data/NSE_featured_data.csv")
+def predict_future(days=30):
+    last_30_days = prices[-30:].reshape(1, 30, 1)
+    future_prices = []
+    
+    for _ in range(days):
+        pred = model.predict(last_30_days)
+        future_prices.append(pred[0][0])
+        last_30_days = np.roll(last_30_days, -1, axis=1)
+        last_30_days[0, -1, 0] = pred
 
-# Select Features
-features = ["SMA_10", "SMA_50", "Daily_Return", "Volatility", "Volume"]
-df = df.dropna(subset=features)  # Remove missing values
+    return scaler.inverse_transform(np.array(future_prices).reshape(-1, 1))
 
-# Get the latest row with feature names
-latest_data = df[features].iloc[-1:].copy()  # Ensures it keeps column names
-
-# Run the prediction
-predicted_price = model.predict(latest_data)[0]
-
-print(f"📈 Predicted Stock Price for Next Day: {predicted_price:.2f}")
+if __name__ == "__main__":
+    print(predict_future(30))
